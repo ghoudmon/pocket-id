@@ -71,6 +71,7 @@ type OidcClient struct {
 	CreatedByID               *string
 	CreatedBy                 *User
 	UserAuthorizedOidcClients []UserAuthorizedOidcClient `gorm:"foreignKey:ClientID;references:ID"`
+	ClaimMappingPolicyId      *string
 }
 
 // IsValidTokenDurationMinutes reports whether a duration is within the configurable range

@@ -30,6 +30,7 @@ type OidcClientDto struct {
 	PkceSupported                       bool                     `json:"pkceSupported,omitempty"`
 	AccessTokenDurationMinutes          int64                    `json:"accessTokenDurationMinutes"`
 	RefreshTokenDurationMinutes         int64                    `json:"refreshTokenDurationMinutes"`
+	ClaimMappingPolicyId                string                   `json:"claimMappingPolicyId"`
 }
 
 type OidcClientWithAllowedUserGroupsDto struct {
@@ -61,6 +62,7 @@ type OidcClientUpdateDto struct {
 	IsGroupRestricted                   bool                     `json:"isGroupRestricted"`
 	AccessTokenDurationMinutes          int64                    `json:"accessTokenDurationMinutes" binding:"omitempty,token_duration"`
 	RefreshTokenDurationMinutes         int64                    `json:"refreshTokenDurationMinutes" binding:"omitempty,token_duration"`
+	ClaimMappingPolicyId                string                   `json:"claimMappingPolicyId"`
 }
 
 type OidcClientCreateDto struct {

@@ -19,9 +19,13 @@
 	import { callbackUrlSchema, emptyToUndefined, optionalUrl } from '$lib/utils/zod-util';
 	import { LucideChevronDown, LucideMoon, LucideSun } from '@lucide/svelte';
 	import { slide } from 'svelte/transition';
+	import { SvelteMap } from 'svelte/reactivity';
 	import { z } from 'zod/v4';
 	import OidcCallbackUrlInput from './oidc-callback-url-input.svelte';
 	import OidcClientImageInput from './oidc-client-image-input.svelte';
+	import * as Select from '$lib/components/ui/select';
+	import { onMount } from 'svelte';
+	import OidcClaimMappingPolicyService from '$lib/services/oidc-claim-mapping-policy-service';
 
 	let {
 		callback,
@@ -66,7 +70,10 @@
 		launchURL: existingClient?.launchURL || '',
 		logoUrl: '',
 		darkLogoUrl: '',
-		pkceSupported: existingClient?.pkceSupported || false
+		pkceSupported: existingClient?.pkceSupported || false,
+		accessTokenDurationMinutes: existingClient?.accessTokenDurationMinutes ?? 60,
+		refreshTokenDurationMinutes: existingClient?.refreshTokenDurationMinutes ?? 30 * 24 * 60,
+		claimMappingPolicyId: existingClient?.claimMappingPolicyId || ''
 	};
 
 	const formSchema = z.object({
@@ -91,7 +98,18 @@
 		skipConsent: z.boolean(),
 		launchURL: optionalUrl,
 		logoUrl: optionalUrl,
-		darkLogoUrl: optionalUrl
+		darkLogoUrl: optionalUrl,
+		accessTokenDurationMinutes: z
+			.number()
+			.min(1)
+			.max(365 * 24 * 60)
+			.int(),
+		refreshTokenDurationMinutes: z
+			.number()
+			.min(1)
+			.max(365 * 24 * 60)
+			.int(),
+		claimMappingPolicyId: z.string(),
 	});
 
 	type FormSchema = typeof formSchema;
@@ -204,6 +222,20 @@
 				$inputs.darkLogoUrl.value = '';
 			}
 		}
+	}
+
+	const claimMappingPolicies = new SvelteMap<string, string>();
+	claimMappingPolicies.set('', m.claim_mapping_policy_default());
+	let claimMappingPolicyService = new OidcClaimMappingPolicyService();
+	onMount(() => {
+		claimMappingPolicyService.listClaimMappingPolicies().then((data) => {
+			data.data.map((mapping) => {
+				claimMappingPolicies.set(mapping.id, mapping.name);
+			});
+		});
+	});
+	function getClaimMappingPolicyName(id: string) {
+		return claimMappingPolicies.get(id);
 	}
 </script>
 
@@ -339,13 +371,15 @@
 	</div>
 
 	{#if showAdvancedOptions}
-		<div class="mt-7 flex flex-col gap-y-7 md:col-span-2" transition:slide={{ duration: 200 }}>
-			<SwitchWithLabel
-				id="requires-par"
-				label={m.requires_pushed_authorization_requests()}
-				description={m.requires_pushed_authorization_requests_description()}
-				bind:checked={$inputs.requiresPushedAuthorizationRequests.value}
-			/>
+		<div class="mt-7 grid grid-cols-1 gap-x-3 gap-y-7 sm:flex-row md:grid-cols-2 md:col-span-2" transition:slide={{ duration: 200 }}>
+			<div>
+				<SwitchWithLabel
+					id="requires-par"
+					label={m.requires_pushed_authorization_requests()}
+					description={m.requires_pushed_authorization_requests_description()}
+					bind:checked={$inputs.requiresPushedAuthorizationRequests.value}
+				/>
+			</div>
 			{#if mode == 'create'}
 				<FormInput
 					label={m.client_id()}
@@ -355,6 +389,27 @@
 					bind:input={$inputs.id}
 				/>
 			{/if}
+			<!-- Claim Mapping policy -->
+			<FormInput 
+				label={m.claim_mapping_policy()} 
+				description={m.claim_mapping_policy_description()} 
+				bind:input={$inputs.claimMappingPolicyId}>
+				<Select.Root type="single" bind:value={$inputs.claimMappingPolicyId.value}>
+					<Select.Trigger 
+						class="w-full md:w-1/2"
+						aria-label={m.claim_mapping_policy()}
+						placeholder={m.claim_mapping_policy()}
+					>
+						{getClaimMappingPolicyName($inputs.claimMappingPolicyId.value)}
+					</Select.Trigger>
+					<Select.Content>
+						{#each claimMappingPolicies as option (option[0])}
+							<Select.Item value={option[0]}>{option[1]}</Select.Item>
+						{/each}
+					</Select.Content>
+				</Select.Root>
+			</FormInput>
+
 		</div>
 	{/if}
 

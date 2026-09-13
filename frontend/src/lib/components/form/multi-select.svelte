@@ -8,7 +8,8 @@
 		items,
 		selectedItems = $bindable(),
 		onSelect,
-		autoClose = false
+		autoClose = false,
+		disabled = false
 	}: {
 		items: {
 			value: string;
@@ -17,6 +18,7 @@
 		selectedItems: string[];
 		onSelect?: (value: string) => void;
 		autoClose?: boolean;
+		disabled?: boolean;
 	} = $props();
 
 	function handleItemSelect(value: string) {
@@ -30,7 +32,7 @@
 </script>
 
 <DropdownMenu.Root>
-	<DropdownMenu.Trigger>
+	<DropdownMenu.Trigger {disabled}>
 		{#snippet child({ props })}
 			<Button {...props} variant="outline">
 				{#each items.filter((item) => selectedItems.includes(item.value)) as item (item.value)}
@@ -48,6 +50,7 @@
 				checked={selectedItems.includes(item.value)}
 				onCheckedChange={() => handleItemSelect(item.value)}
 				closeOnSelect={autoClose}
+				{disabled}
 			>
 				{item.label}
 			</DropdownMenu.CheckboxItem>
