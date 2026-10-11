@@ -132,7 +132,11 @@ func (h *tokenHandler) validateRefreshAPIGrant(ctx context.Context, client Clien
 	}
 
 	_, _, err = resolveResource(ctx, nil, h.apiAccess, client.GetID(), resource, accessRequest.GetGrantedScopes(), SubjectTypeUser)
-	return err
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func refreshGrantResource(clientID, issuer string, grantedAudience fosite.Arguments) (string, error) {

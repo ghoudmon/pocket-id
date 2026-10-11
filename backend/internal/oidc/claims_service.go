@@ -63,8 +63,7 @@ func (s *ClaimsService) loadUserClaimsSource(ctx context.Context, userID string,
 			Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errClaimsUserNotFound
-		}
-		if err != nil {
+		}else if err != nil {
 			return err
 		}
 
@@ -80,6 +79,7 @@ func (s *ClaimsService) loadUserClaimsSource(ctx context.Context, userID string,
 		if s.customClaims == nil || !policyHasCustomClaimMapping(src.policy) {
 			return nil
 		}
+
 		src.customClaims, err = s.customClaims.GetCustomClaimsForUserWithUserGroups(ctx, src.user.ID, db)
 		return err
 	})
@@ -106,8 +106,7 @@ func (s *ClaimsService) loadGrantClaimsSource(ctx context.Context, userID string
 	src, err := s.loadUserClaimsSource(ctx, userID, client.GetID())
 	if errors.Is(err, errClaimsUserNotFound) {
 		return nil, fosite.ErrInvalidGrant.WithHint("The user account no longer exists.")
-	}
-	if err != nil {
+	} else if err != nil {
 		return nil, err
 	}
 
@@ -122,10 +121,8 @@ func (s *ClaimsService) loadGrantClaimsSource(ctx context.Context, userID string
 	return src, nil
 }
 
-// GetClaimMappingPolicyByClientID returns the claim mapping policy assigned to the client, or the
-// default policy when the client doesn't have one assigned (claim_mapping_policy_id IS NULL).
-// Both candidates are fetched in a single query: the assigned policy is ordered first so it wins
-// over the default whenever it exists.
+// GetClaimMappingPolicyByClientID returns the claim mapping policy assigned to the client, or the default policy when the client doesn't have one assigned (claim_mapping_policy_id IS NULL)
+// Both candidates are fetched in a single query: the assigned policy is ordered first so it wins over the default whenever it exists
 func (s *ClaimsService) GetClaimMappingPolicyByClientID(ctx context.Context, clientID string) (*model.OidcClaimMappingPolicy, error) {
 	var claimMappingPolicy model.OidcClaimMappingPolicy
 	err := dbFromContext(ctx, s.db).
@@ -145,7 +142,7 @@ func (s *ClaimsService) applyTokenClaims(session *Session, scopes fosite.Argumen
 	// Record the signing algorithm on the ID token header so fosite derives the at_hash/c_hash digest from it (e.g. RS384 -> SHA-384, ES512 -> SHA-512)
 	// Without this the header is empty and fosite defaults to SHA-256, producing wrong hashes whenever the signing key is not a 256-bit algorithm
 	// ToMap() strips "alg" before signing, so this never overrides the real JWS header
-	// The signer is always wired in production; it is only nil in unit tests that do not assert hash correctness
+	// The signer is always wired in production: it is only nil in unit tests that do not assert hash correctness
 	if s.signer != nil {
 		alg, err := s.signer.GetKeyAlg()
 		if err != nil {
@@ -155,8 +152,15 @@ func (s *ClaimsService) applyTokenClaims(session *Session, scopes fosite.Argumen
 	}
 
 	// Both tokens are built from the same source, so they always agree on the user data
-	applyUserClaimsToIDToken(session, src.user.ID, s.buildClaims(src, scopes, IDTokenType))
-	applyUserClaimsToAccessToken(session, src.user.ID, s.buildClaims(src, scopes, AccessTokenType))
+	applyUserClaimsToIDToken(
+		session, src.user.ID,
+		s.buildClaims(src, scopes, IDTokenType),
+	)
+	applyUserClaimsToAccessToken(
+		session,
+		s.buildClaims(src, scopes, AccessTokenType),
+	)
+
 	return nil
 }
 
@@ -170,7 +174,7 @@ func applyUserClaimsToIDToken(session *Session, userID string, claims map[string
 	}
 }
 
-func applyUserClaimsToAccessToken(session *Session, userID string, claims map[string]any) {
+func applyUserClaimsToAccessToken(session *Session, claims map[string]any) {
 	jwtClaims := session.GetJWTClaims().(*fositejwt.JWTClaims)
 	jwtClaims.Extra = claims
 }
@@ -245,13 +249,16 @@ func (s *ClaimsService) applyUserClaims(claims map[string]any, user model.User, 
 				if mapping.ClaimName == "*" {
 					claimName = customClaim.Key
 				}
+
 				// A custom claim value can be a JSON document or a plain string
 				var jsonValue any
-				if err := json.Unmarshal([]byte(customClaim.Value), &jsonValue); err == nil {
+				err := json.Unmarshal([]byte(customClaim.Value), &jsonValue)
+				if err == nil {
 					claims[claimName] = jsonValue
 				} else {
 					claims[claimName] = customClaim.Value
 				}
+
 				if mapping.SourceValue != "*" {
 					break
 				}

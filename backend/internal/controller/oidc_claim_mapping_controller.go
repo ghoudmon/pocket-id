@@ -16,18 +16,19 @@ import (
 // @Summary OIDC claim mapping policy controller
 // @Description Initializes all OIDC claim mapping policy-related API endpoints
 // @Tags OIDC Claim Mapping Policy
-func NewOidcClaimMappingPolicyController(group *gin.RouterGroup, authMiddleware *middleware.AuthMiddleware, oidcClaimMappingPolicyService *service.OidcClaimMappingPolicyService) {
+func NewOidcClaimMappingPolicyController(r *gin.RouterGroup, authMiddleware *middleware.AuthMiddleware, oidcClaimMappingPolicyService *service.OidcClaimMappingPolicyService) {
 	ocmc := &OidcClaimMappingPolicyController{oidcClaimMappingService: oidcClaimMappingPolicyService}
 
-	group.GET("/oidc/claim-mapping-policies", authMiddleware.Add(), httpserver.Handle(ocmc.listClaimMappingPolicyHandler))
-	group.POST("/oidc/claim-mapping-policies", authMiddleware.Add(), httpserver.Handle(ocmc.createClaimMappingPolicyHandler))
-	group.GET("/oidc/claim-mapping-policies/:id", authMiddleware.Add(), httpserver.Handle(ocmc.getClaimMappingPolicyHandler))
-	group.PUT("/oidc/claim-mapping-policies/:id", authMiddleware.Add(), httpserver.Handle(ocmc.updateClaimMappingPolicyHandler))
-	group.DELETE("/oidc/claim-mapping-policies/:id", authMiddleware.Add(), httpserver.Handle(ocmc.deleteClaimMappingPolicyHandler))
-	group.GET("/oidc/claim-mapping-policies/:id/clients", authMiddleware.Add(), httpserver.Handle(ocmc.listClientsByClaimMappingPolicyHandler))
-	group.GET("/oidc/claim-mapping-policies/:id/assignable-clients", authMiddleware.Add(), httpserver.Handle(ocmc.listAssignableClientsHandler))
-	group.POST("/oidc/claim-mapping-policies/:id/clients/:clientId", authMiddleware.Add(), httpserver.Handle(ocmc.assignClientHandler))
-	group.DELETE("/oidc/claim-mapping-policies/:id/clients/:clientId", authMiddleware.Add(), httpserver.Handle(ocmc.removeClientHandler))
+	group := r.Group("",authMiddleware.Add() )
+	group.GET("/oidc/claim-mapping-policies", httpserver.Handle(ocmc.listClaimMappingPolicyHandler))
+	group.POST("/oidc/claim-mapping-policies", httpserver.Handle(ocmc.createClaimMappingPolicyHandler))
+	group.GET("/oidc/claim-mapping-policies/:id", httpserver.Handle(ocmc.getClaimMappingPolicyHandler))
+	group.PUT("/oidc/claim-mapping-policies/:id", httpserver.Handle(ocmc.updateClaimMappingPolicyHandler))
+	group.DELETE("/oidc/claim-mapping-policies/:id", httpserver.Handle(ocmc.deleteClaimMappingPolicyHandler))
+	group.GET("/oidc/claim-mapping-policies/:id/clients", httpserver.Handle(ocmc.listClientsByClaimMappingPolicyHandler))
+	group.GET("/oidc/claim-mapping-policies/:id/assignable-clients", httpserver.Handle(ocmc.listAssignableClientsHandler))
+	group.POST("/oidc/claim-mapping-policies/:id/clients/:clientId", httpserver.Handle(ocmc.assignClientHandler))
+	group.DELETE("/oidc/claim-mapping-policies/:id/clients/:clientId", httpserver.Handle(ocmc.removeClientHandler))
 
 }
 
@@ -196,7 +197,9 @@ func (ocmc *OidcClaimMappingPolicyController) listClientsByClaimMappingPolicyHan
 	searchTerm := c.Query("search")
 	listRequestOptions := utils.ParseListRequestOptions(c)
 
-	clients, pagination, err := ocmc.oidcClaimMappingService.ListClientsByClaimMappingPolicy(c.Request.Context(), c.Param("id"), searchTerm, listRequestOptions)
+	clients, pagination, err := ocmc.oidcClaimMappingService.ListClientsByClaimMappingPolicy(
+		c.Request.Context(), c.Param("id"), searchTerm, listRequestOptions,
+	)
 	if err != nil {
 		return err
 	}
@@ -230,7 +233,9 @@ func (ocmc *OidcClaimMappingPolicyController) listAssignableClientsHandler(c *gi
 	searchTerm := c.Query("search")
 	listRequestOptions := utils.ParseListRequestOptions(c)
 
-	clients, pagination, err := ocmc.oidcClaimMappingService.ListAssignableClients(c.Request.Context(), c.Param("id"), searchTerm, listRequestOptions)
+	clients, pagination, err := ocmc.oidcClaimMappingService.ListAssignableClients(
+		c.Request.Context(), c.Param("id"), searchTerm, listRequestOptions,
+	)
 	if err != nil {
 		return err
 	}
@@ -257,7 +262,9 @@ func (ocmc *OidcClaimMappingPolicyController) listAssignableClientsHandler(c *gi
 // @Failure default {object} dto.ErrorDto "Error"
 // @Router /api/oidc/claim-mapping-policies/{id}/clients/{clientId} [post]
 func (ocmc *OidcClaimMappingPolicyController) assignClientHandler(c *gin.Context) error {
-	err := ocmc.oidcClaimMappingService.AssignClientToClaimMappingPolicy(c.Request.Context(), c.Param("id"), c.Param("clientId"))
+	err := ocmc.oidcClaimMappingService.AssignClientToClaimMappingPolicy(
+		c.Request.Context(), c.Param("id"), c.Param("clientId"),
+	)
 	if err != nil {
 		return err
 	}
@@ -276,7 +283,9 @@ func (ocmc *OidcClaimMappingPolicyController) assignClientHandler(c *gin.Context
 // @Failure default {object} dto.ErrorDto "Error"
 // @Router /api/oidc/claim-mapping-policies/{id}/clients/{clientId} [delete]
 func (ocmc *OidcClaimMappingPolicyController) removeClientHandler(c *gin.Context) error {
-	err := ocmc.oidcClaimMappingService.RemoveClientFromClaimMappingPolicy(c.Request.Context(), c.Param("id"), c.Param("clientId"))
+	err := ocmc.oidcClaimMappingService.RemoveClientFromClaimMappingPolicy(
+		c.Request.Context(), c.Param("id"), c.Param("clientId"),
+	)
 	if err != nil {
 		return err
 	}
@@ -294,6 +303,7 @@ func clientMetaDataDtos(clients []model.OidcClient) ([]dto.OidcClientMetaDataDto
 		if err := dto.MapStruct(client, &clientDto); err != nil {
 			return nil, err
 		}
+
 		clientDto.HasDarkLogo = client.HasDarkLogo()
 		dtos[i] = clientDto
 	}
