@@ -19,7 +19,7 @@ import (
 func NewOidcClaimMappingPolicyController(r *gin.RouterGroup, authMiddleware *middleware.AuthMiddleware, oidcClaimMappingPolicyService *service.OidcClaimMappingPolicyService) {
 	ocmc := &OidcClaimMappingPolicyController{oidcClaimMappingService: oidcClaimMappingPolicyService}
 
-	group := r.Group("",authMiddleware.Add() )
+	group := r.Group("", authMiddleware.Add())
 	group.GET("/oidc/claim-mapping-policies", httpserver.Handle(ocmc.listClaimMappingPolicyHandler))
 	group.POST("/oidc/claim-mapping-policies", httpserver.Handle(ocmc.createClaimMappingPolicyHandler))
 	group.GET("/oidc/claim-mapping-policies/:id", httpserver.Handle(ocmc.getClaimMappingPolicyHandler))

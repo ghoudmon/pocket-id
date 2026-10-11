@@ -63,7 +63,7 @@ func (s *ClaimsService) loadUserClaimsSource(ctx context.Context, userID string,
 			Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errClaimsUserNotFound
-		}else if err != nil {
+		} else if err != nil {
 			return err
 		}
 

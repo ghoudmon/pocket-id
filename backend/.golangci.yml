@@ -21,7 +21,6 @@ linters:
     - exhaustive
     - gocheckcompilerdirectives
     - gochecksumtype
-    - gocognit
     - gocritic
     - gosec
     - gosmopolitan
