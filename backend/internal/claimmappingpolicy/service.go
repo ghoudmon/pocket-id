@@ -4,9 +4,14 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"slices"
+	"strings"
+
+	"github.com/pocket-id/fosite"
 
 	"github.com/pocket-id/pocket-id/backend/internal/apperror"
 	"github.com/pocket-id/pocket-id/backend/internal/common"
+	"github.com/pocket-id/pocket-id/backend/internal/dto"
 	"github.com/pocket-id/pocket-id/backend/internal/model"
 	"github.com/pocket-id/pocket-id/backend/internal/utils"
 	"gorm.io/gorm"
@@ -370,6 +375,13 @@ func ClaimMappingsFromDto(dtos []OidcClaimMappingDto) OidcClaimMappings {
 			IDToken:     mapping.IDToken,
 			UserInfo:    mapping.UserInfo,
 		}
+		for _, apiScope := range mapping.APIScopes {
+			// API resource identifiers are stored without a trailing slash, which is also how they appear in the token audience
+			mappings[i].APIScopes = append(mappings[i].APIScopes, OidcClaimMappingAPIScope{
+				Resource: strings.TrimRight(apiScope.Resource, "/"),
+				Key:      apiScope.Key,
+			})
+		}
 	}
 	return mappings
 }
@@ -414,11 +426,33 @@ func (s *Service) DeleteClaimMappingPolicy(ctx context.Context, policyID string)
 	return tx.Commit().Error
 }
 
-// ValidateClaimMappings checks the rules the request binding cannot express, such as duplicate and reserved claim names
+// mappableStandardScopes are the OpenID Connect scopes a claim mapping can reference by name
+var mappableStandardScopes = []string{"openid", "profile", "email", "offline_access", "groups"}
+
+// ValidateClaimMappings checks rules that request binding cannot express
 func ValidateClaimMappings(mappings []OidcClaimMappingDto) error {
 	seenClaims := make(map[string]bool)
 
 	for _, mapping := range mappings {
+		if len(mapping.Scope) == 0 && len(mapping.APIScopes) == 0 {
+			return apperror.ValidationMessage("claim mapping must reference at least one scope or API permission")
+		}
+		// API permission keys are only unique per API, so they must be referenced together with the API's resource identifier and never as a bare scope
+		for _, scope := range mapping.Scope {
+			if !slices.Contains(mappableStandardScopes, scope) {
+				return apperror.ValidationMessage("invalid OAuth scope in claim mapping")
+			}
+		}
+		for _, apiScope := range mapping.APIScopes {
+			if len(apiScope.Resource) > 350 || !dto.ValidateResourceURI(apiScope.Resource) ||
+				len(apiScope.Key) > 128 || !fosite.IsValidScopeToken(apiScope.Key) {
+				return apperror.ValidationMessage("invalid API permission in claim mapping")
+			}
+		}
+		if len(mapping.ClaimName) == 0 || len(mapping.SourceType) == 0 || len(mapping.SourceValue) == 0 {
+			return apperror.ValidationMessage("claim name, source type and source value are required")
+		}
+		// Check for duplicates
 		if seenClaims[mapping.ClaimName] {
 			return apperror.ValidationMessage("duplicate claim mapping for '" + mapping.ClaimName + "'")
 		}

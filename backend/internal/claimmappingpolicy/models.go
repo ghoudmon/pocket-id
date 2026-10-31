@@ -44,9 +44,17 @@ type OidcClaimMapping struct {
 	SourceType  OidcClaimMappingSourceType `json:"sourceType"`
 	SourceValue string                     `json:"sourceValue"`
 	Scope       datatype.StringList        `json:"scope"`
+	APIScopes   []OidcClaimMappingAPIScope `json:"apiScopes,omitempty"`
 	AccessToken bool                       `json:"accessToken"`
 	IDToken     bool                       `json:"idToken"`
 	UserInfo    bool                       `json:"userInfo"`
+}
+
+// OidcClaimMappingAPIScope references a permission of a custom API by the API's resource identifier and the permission key
+// Permission keys are only unique per API, so the mapping applies only to tokens granted the key for that API's audience
+type OidcClaimMappingAPIScope struct {
+	Resource string `json:"resource"`
+	Key      string `json:"key"`
 }
 
 type OidcClaimMappingSourceType string

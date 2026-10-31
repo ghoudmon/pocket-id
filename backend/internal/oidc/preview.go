@@ -45,13 +45,14 @@ func (b *ClientPreviewBuilder) BuildClientPreview(ctx context.Context, client mo
 
 	request := b.newPreviewRequest(ctx, client, userID, scopeArgs, authenticationMethod)
 	session := request.GetSession().(*Session)
+	audience := request.GetGrantedAudience()
 	preview := &ClientPreview{}
 
 	// Without openid a real authorization issues no ID token and /userinfo rejects the access token, so the preview leaves both out
 	if scopeArgs.Has("openid") {
-		preview.UserInfo = b.claimsService.buildClaims(claimsSource, scopeArgs, UserInfoType)
+		preview.UserInfo = b.claimsService.buildClaims(claimsSource, scopeArgs, audience, UserInfoType)
 
-		applyUserClaimsToIDToken(session, userID, b.claimsService.buildClaims(claimsSource, scopeArgs, IDTokenType))
+		applyUserClaimsToIDToken(session, userID, b.claimsService.buildClaims(claimsSource, scopeArgs, audience, IDTokenType))
 
 		idToken, err := b.strategies.idToken.GenerateIDToken(ctx, b.strategies.config.GetIDTokenLifespan(ctx), request)
 		if err != nil {
@@ -64,7 +65,7 @@ func (b *ClientPreviewBuilder) BuildClientPreview(ctx context.Context, client mo
 		}
 	}
 
-	applyUserClaimsToAccessToken(session, b.claimsService.buildClaims(claimsSource, scopeArgs, AccessTokenType))
+	applyUserClaimsToAccessToken(session, b.claimsService.buildClaims(claimsSource, scopeArgs, audience, AccessTokenType))
 
 	accessToken, _, err := b.strategies.accessToken.GenerateAccessToken(ctx, request)
 	if err != nil {

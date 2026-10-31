@@ -176,22 +176,22 @@ func TestClaimsServiceBuildClaims(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("openid alone releases no mapped claim in the ID token", func(t *testing.T) {
-		claims := service.buildClaims(claimsSource, []string{"openid"}, IDTokenType)
+		claims := service.buildClaims(claimsSource, []string{"openid"}, nil, IDTokenType)
 		require.Empty(t, claims)
 	})
 
 	t.Run("userinfo always releases sub", func(t *testing.T) {
-		claims := service.buildClaims(claimsSource, []string{"openid"}, UserInfoType)
+		claims := service.buildClaims(claimsSource, []string{"openid"}, nil, UserInfoType)
 		require.Equal(t, map[string]any{"sub": userID}, claims)
 	})
 
 	t.Run("userinfo sub is set even when no scope matches a mapping", func(t *testing.T) {
-		claims := service.buildClaims(claimsSource, nil, UserInfoType)
+		claims := service.buildClaims(claimsSource, nil, nil, UserInfoType)
 		require.Equal(t, map[string]any{"sub": userID}, claims)
 	})
 
 	t.Run("email scope releases email claims", func(t *testing.T) {
-		claims := service.buildClaims(claimsSource, []string{"openid", "email"}, IDTokenType)
+		claims := service.buildClaims(claimsSource, []string{"openid", "email"}, nil, IDTokenType)
 		require.Equal(t, "tim@example.com", claims["email"])
 		require.Equal(t, true, claims["email_verified"])
 		require.NotContains(t, claims, "given_name")
@@ -199,12 +199,12 @@ func TestClaimsServiceBuildClaims(t *testing.T) {
 	})
 
 	t.Run("groups scope releases group names", func(t *testing.T) {
-		claims := service.buildClaims(claimsSource, []string{"groups"}, IDTokenType)
+		claims := service.buildClaims(claimsSource, []string{"groups"}, nil, IDTokenType)
 		require.Equal(t, []string{"developers"}, claims["groups"])
 	})
 
 	t.Run("profile scope releases profile and custom claims", func(t *testing.T) {
-		claims := service.buildClaims(claimsSource, []string{"profile"}, IDTokenType)
+		claims := service.buildClaims(claimsSource, []string{"profile"}, nil, IDTokenType)
 		require.Equal(t, "Tim", claims["given_name"])
 		require.Equal(t, "Cook", claims["family_name"])
 		require.Equal(t, "Tim Cook", claims["name"])
@@ -240,7 +240,7 @@ func TestClaimsServiceBuildClaimsKeepsIntegerCustomClaims(t *testing.T) {
 	claimsSource, err := service.loadUserClaimsSource(t.Context(), "user-1", "client-1")
 	require.NoError(t, err)
 
-	claims := service.buildClaims(claimsSource, []string{"profile"}, IDTokenType)
+	claims := service.buildClaims(claimsSource, []string{"profile"}, nil, IDTokenType)
 	require.Equal(t, int64(1234567890123456789), claims["discord_id"])
 	require.Equal(t, int64(1000000), claims["uid_number"])
 	require.InDelta(t, 1.5, claims["ratio"], 0)
@@ -263,7 +263,7 @@ func TestClaimsServiceAppliesSigningAlgToIDTokenHeader(t *testing.T) {
 			session.Subject = "alg-user"
 			src := &userClaimsSource{user: model.User{Base: model.Base{ID: "alg-user"}}}
 
-			require.NoError(t, service.applyTokenClaims(session, fosite.Arguments{"openid"}, src))
+			require.NoError(t, service.applyTokenClaims(session, fosite.Arguments{"openid"}, nil, src))
 			require.Equal(t, alg.String(), session.IDTokenHeaders().Get("alg"))
 		})
 	}
@@ -354,4 +354,55 @@ func TestClaimsServicePreviewClaimMappingsWithoutOpenIDScope(t *testing.T) {
 	require.Nil(t, preview.IDToken, "no ID token is issued without the openid scope")
 	require.Nil(t, preview.UserInfo, "userinfo rejects tokens without the openid scope")
 	require.Equal(t, map[string]any{"mail": "tim@example.com"}, preview.AccessToken)
+}
+
+// TestClaimsServiceBuildClaimsAPIScope verifies that a mapping referencing an API permission only
+// releases its claim into tokens granted that key for the referenced API. Permission keys are
+// unique per API only, so another API defining the same key must not receive the claim.
+func TestClaimsServiceBuildClaimsAPIScope(t *testing.T) {
+	for _, key := range []string{"read:orders", "phone", "address"} {
+		t.Run(key, func(t *testing.T) {
+
+			service := newClaimsService(nil, nil, "", nil, appconfig.StaticResolver{})
+			source := &userClaimsSource{
+				user: model.User{UserGroups: []model.UserGroup{{Name: "readers"}}},
+				policy: claimmappingpolicy.OidcClaimMappingPolicy{ClaimMappings: claimmappingpolicy.OidcClaimMappings{
+					{
+						ClaimName: "groups", SourceType: claimmappingpolicy.MappingSourceUserField, SourceValue: "groups",
+						APIScopes:   []claimmappingpolicy.OidcClaimMappingAPIScope{{Resource: "https://orders.example.com", Key: key}},
+						AccessToken: true,
+					},
+				}},
+			}
+			orders := []string{"client-id", "https://orders.example.com"}
+			billing := []string{"client-id", "https://billing.example.com"}
+
+			require.Equal(t, map[string]any{"groups": []string{"readers"}}, service.buildClaims(source, []string{key}, orders, AccessTokenType))
+			require.Empty(t, service.buildClaims(source, []string{key}, billing, AccessTokenType))
+			require.Empty(t, service.buildClaims(source, []string{"profile"}, orders, AccessTokenType))
+			require.Empty(t, service.buildClaims(source, []string{key}, orders, IDTokenType))
+
+			for _, audience := range [][]string{orders, billing} {
+				session := NewEmptySession()
+				require.NoError(t, service.applyTokenClaims(session, fosite.Arguments{key}, audience, source))
+				_, released := session.GetJWTClaims().ToMapClaims()["groups"]
+				require.Equal(t, audience[1] == "https://orders.example.com", released, audience[1])
+			}
+
+		})
+	}
+}
+
+func TestClaimsServicePreviewDoesNotGrantAnAPIAudience(t *testing.T) {
+	db := testutils.NewDatabaseForTest(t)
+	require.NoError(t, claimmappingpolicy.Bootstrap(t.Context(), db))
+	require.NoError(t, db.Create(&model.User{Base: model.Base{ID: "preview-user"}, Username: "preview"}).Error)
+	service := newClaimsService(db, nil, "", nil, appconfig.StaticResolver{})
+	preview, err := service.PreviewClaimMappings(t.Context(), "preview-user", []string{"openid", "read:orders"}, claimmappingpolicy.OidcClaimMappings{
+		{ClaimName: "department", SourceType: claimmappingpolicy.MappingSourceStatic, SourceValue: "orders", APIScopes: []claimmappingpolicy.OidcClaimMappingAPIScope{{Resource: "https://orders.example.com", Key: "read:orders"}}, AccessToken: true, IDToken: true, UserInfo: true},
+	})
+	require.NoError(t, err)
+	require.Empty(t, preview.AccessToken)
+	require.Empty(t, preview.IDToken)
+	require.Equal(t, map[string]any{"sub": "preview-user"}, preview.UserInfo)
 }

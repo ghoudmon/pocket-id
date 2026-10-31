@@ -4,7 +4,9 @@ package claimmappingpolicy
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 
@@ -44,7 +46,7 @@ func TestDeleteClaimMappingPolicyResetsClients(t *testing.T) {
 	policy, err := service.CreateClaimMappingPolicy(context.Background(), OidcClaimMappingPolicyDto{
 		OidcClaimMappingPolicyMetadataDto: OidcClaimMappingPolicyMetadataDto{Name: "Attached"},
 		ClaimMappings: []OidcClaimMappingDto{
-			{ClaimName: "user_id", SourceType: "user_field", SourceValue: string(UserFieldID), IDToken: true},
+			{Scope: []string{"openid"}, ClaimName: "user_id", SourceType: "user_field", SourceValue: string(UserFieldID), IDToken: true},
 		},
 	})
 	require.NoError(t, err)
@@ -123,6 +125,7 @@ func TestCreateClaimMappingPolicyWithDefault(t *testing.T) {
 		},
 		ClaimMappings: []OidcClaimMappingDto{
 			{
+Scope: []string{"openid"},
 				ClaimName:   "user_id",
 				SourceType:  "user_field",
 				SourceValue: string(UserFieldID),
@@ -151,6 +154,7 @@ func TestCreateClaimMappingPolicyDefaultUnsetsOthers(t *testing.T) {
 		},
 		ClaimMappings: []OidcClaimMappingDto{
 			{
+Scope: []string{"openid"},
 				ClaimName:   "user_id",
 				SourceType:  "user_field",
 				SourceValue: string(UserFieldID),
@@ -169,6 +173,7 @@ func TestCreateClaimMappingPolicyDefaultUnsetsOthers(t *testing.T) {
 		},
 		ClaimMappings: []OidcClaimMappingDto{
 			{
+Scope: []string{"openid"},
 				ClaimName:   "user_id",
 				SourceType:  "user_field",
 				SourceValue: string(UserFieldID),
@@ -206,12 +211,14 @@ func TestUpdateClaimMappingPolicy(t *testing.T) {
 
 	mappings := []OidcClaimMappingDto{
 		{
+Scope: []string{"openid"},
 			ClaimName:   "user_id",
 			SourceType:  "user_field",
 			SourceValue: string(UserFieldID),
 			IDToken:     true,
 		},
 		{
+Scope: []string{"openid"},
 			ClaimName:   "email",
 			SourceType:  "user_field",
 			SourceValue: string(UserFieldEmail),
@@ -233,6 +240,7 @@ func TestUpdateClaimMappingPolicy(t *testing.T) {
 		},
 		ClaimMappings: []OidcClaimMappingDto{
 			{
+Scope: []string{"openid"},
 				ClaimName:   "user_id",
 				SourceType:  "user_field",
 				SourceValue: string(UserFieldID),
@@ -266,6 +274,7 @@ func TestUpdateClaimMappingPolicySetAsDefault(t *testing.T) {
 		},
 		ClaimMappings: []OidcClaimMappingDto{
 			{
+Scope: []string{"openid"},
 				ClaimName:   "user_id",
 				SourceType:  "user_field",
 				SourceValue: string(UserFieldID),
@@ -283,6 +292,7 @@ func TestUpdateClaimMappingPolicySetAsDefault(t *testing.T) {
 		},
 		ClaimMappings: []OidcClaimMappingDto{
 			{
+Scope: []string{"openid"},
 				ClaimName:   "user_id",
 				SourceType:  "user_field",
 				SourceValue: string(UserFieldID),
@@ -301,6 +311,7 @@ func TestUpdateClaimMappingPolicySetAsDefault(t *testing.T) {
 		},
 		ClaimMappings: []OidcClaimMappingDto{
 			{
+Scope: []string{"openid"},
 				ClaimName:   "user_id",
 				SourceType:  "user_field",
 				SourceValue: string(UserFieldID),
@@ -334,6 +345,7 @@ func TestDeleteClaimMappingPolicy(t *testing.T) {
 		},
 		ClaimMappings: []OidcClaimMappingDto{
 			{
+Scope: []string{"openid"},
 				ClaimName:   "user_id",
 				SourceType:  "user_field",
 				SourceValue: string(UserFieldID),
@@ -366,6 +378,7 @@ func TestDeleteDefaultClaimMappingPolicyFallsBackToBuiltIn(t *testing.T) {
 		},
 		ClaimMappings: []OidcClaimMappingDto{
 			{
+Scope: []string{"openid"},
 				ClaimName:   "user_id",
 				SourceType:  "user_field",
 				SourceValue: string(UserFieldID),
@@ -397,7 +410,7 @@ func TestUpdateClaimMappingPolicyUnsetDefaultFallsBackToBuiltIn(t *testing.T) {
 	input := OidcClaimMappingPolicyDto{
 		OidcClaimMappingPolicyMetadataDto: OidcClaimMappingPolicyMetadataDto{Name: "Custom", IsDefault: true},
 		ClaimMappings: []OidcClaimMappingDto{
-			{ClaimName: "user_id", SourceType: "user_field", SourceValue: string(UserFieldID), IDToken: true},
+			{Scope: []string{"openid"}, ClaimName: "user_id", SourceType: "user_field", SourceValue: string(UserFieldID), IDToken: true},
 		},
 	}
 	created, err := service.CreateClaimMappingPolicy(context.Background(), input)
@@ -481,7 +494,7 @@ func TestUpdateBuiltInClaimMappingPolicyOnlyAllowsDefaultFlag(t *testing.T) {
 		_, err := service.CreateClaimMappingPolicy(context.Background(), OidcClaimMappingPolicyDto{
 			OidcClaimMappingPolicyMetadataDto: OidcClaimMappingPolicyMetadataDto{Name: "New Default", IsDefault: true},
 			ClaimMappings: []OidcClaimMappingDto{
-				{ClaimName: "user_id", SourceType: "user_field", SourceValue: string(UserFieldID), IDToken: true},
+				{Scope: []string{"openid"}, ClaimName: "user_id", SourceType: "user_field", SourceValue: string(UserFieldID), IDToken: true},
 			},
 		})
 		require.NoError(t, err)
@@ -498,12 +511,14 @@ func TestUpdateBuiltInClaimMappingPolicyOnlyAllowsDefaultFlag(t *testing.T) {
 func TestValidateClaimMappingsDuplicateClaims(t *testing.T) {
 	err := ValidateClaimMappings([]OidcClaimMappingDto{
 		{
+Scope: []string{"openid"},
 			ClaimName:   "user_id",
 			SourceType:  "user_field",
 			SourceValue: string(UserFieldID),
 			IDToken:     true,
 		},
 		{
+Scope: []string{"openid"},
 			ClaimName:   "user_id",
 			SourceType:  "user_field",
 			SourceValue: string(UserFieldEmail),
@@ -522,12 +537,14 @@ func TestValidateClaimMappingsReservedClaims(t *testing.T) {
 		t.Run(claim, func(t *testing.T) {
 			err := ValidateClaimMappings([]OidcClaimMappingDto{
 				{
+Scope: []string{"openid"},
 					ClaimName:   "user_id",
 					SourceType:  "user_field",
 					SourceValue: string(UserFieldID),
 					IDToken:     true,
 				},
 				{
+Scope: []string{"openid"},
 					ClaimName:   claim,
 					SourceType:  "user_field",
 					SourceValue: string(UserFieldEmail),
@@ -544,6 +561,7 @@ func TestValidateClaimMappingsReservedClaims(t *testing.T) {
 func TestValidateClaimMappingsInvalidUserField(t *testing.T) {
 	err := ValidateClaimMappings([]OidcClaimMappingDto{
 		{
+Scope: []string{"openid"},
 			ClaimName:   "user_id",
 			SourceType:  "user_field",
 			SourceValue: "invalid_field",
@@ -580,12 +598,14 @@ func TestValidateClaimMappingsValidUserFields(t *testing.T) {
 		t.Run(string(field), func(t *testing.T) {
 			err := ValidateClaimMappings([]OidcClaimMappingDto{
 				{
+Scope: []string{"openid"},
 					ClaimName:   "user_id",
 					SourceType:  "user_field",
 					SourceValue: string(UserFieldID),
 					IDToken:     true,
 				},
 				{
+Scope: []string{"openid"},
 					ClaimName:   string(field),
 					SourceType:  "user_field",
 					SourceValue: string(field),
@@ -600,12 +620,14 @@ func TestValidateClaimMappingsValidUserFields(t *testing.T) {
 func TestValidateClaimMappingsCustomClaim(t *testing.T) {
 	err := ValidateClaimMappings([]OidcClaimMappingDto{
 		{
+Scope: []string{"openid"},
 			ClaimName:   "user_id",
 			SourceType:  "user_field",
 			SourceValue: string(UserFieldID),
 			IDToken:     true,
 		},
 		{
+Scope: []string{"openid"},
 			ClaimName:   "custom_claim",
 			SourceType:  "custom_claim",
 			SourceValue: "my_custom_key",
@@ -618,12 +640,14 @@ func TestValidateClaimMappingsCustomClaim(t *testing.T) {
 func TestValidateClaimMappingsStaticSource(t *testing.T) {
 	err := ValidateClaimMappings([]OidcClaimMappingDto{
 		{
+Scope: []string{"openid"},
 			ClaimName:   "user_id",
 			SourceType:  "user_field",
 			SourceValue: string(UserFieldID),
 			IDToken:     true,
 		},
 		{
+Scope: []string{"openid"},
 			ClaimName:   "static_claim",
 			SourceType:  "static",
 			SourceValue: `{"role": "admin"}`,
@@ -668,6 +692,7 @@ func TestValidateClaimMappingsValidComplexPolicy(t *testing.T) {
 			IDToken:     true,
 		},
 		{
+Scope: []string{"openid"},
 			ClaimName:   "app_version",
 			SourceType:  "static",
 			SourceValue: "1.0.0",
@@ -690,6 +715,7 @@ func TestListClaimMappingPolicyWithData(t *testing.T) {
 			},
 			ClaimMappings: []OidcClaimMappingDto{
 				{
+Scope: []string{"openid"},
 					ClaimName:   "user_id",
 					SourceType:  "user_field",
 					SourceValue: string(UserFieldID),
@@ -717,7 +743,7 @@ func TestListClientsByClaimMappingPolicy(t *testing.T) {
 	policy, err := service.CreateClaimMappingPolicy(context.Background(), OidcClaimMappingPolicyDto{
 		OidcClaimMappingPolicyMetadataDto: OidcClaimMappingPolicyMetadataDto{Name: "Attached"},
 		ClaimMappings: []OidcClaimMappingDto{
-			{ClaimName: "user_id", SourceType: "user_field", SourceValue: string(UserFieldID), IDToken: true},
+			{Scope: []string{"openid"}, ClaimName: "user_id", SourceType: "user_field", SourceValue: string(UserFieldID), IDToken: true},
 		},
 	})
 	require.NoError(t, err)
@@ -725,7 +751,7 @@ func TestListClientsByClaimMappingPolicy(t *testing.T) {
 	otherPolicy, err := service.CreateClaimMappingPolicy(context.Background(), OidcClaimMappingPolicyDto{
 		OidcClaimMappingPolicyMetadataDto: OidcClaimMappingPolicyMetadataDto{Name: "Other"},
 		ClaimMappings: []OidcClaimMappingDto{
-			{ClaimName: "user_id", SourceType: "user_field", SourceValue: string(UserFieldID), IDToken: true},
+			{Scope: []string{"openid"}, ClaimName: "user_id", SourceType: "user_field", SourceValue: string(UserFieldID), IDToken: true},
 		},
 	})
 	require.NoError(t, err)
@@ -763,7 +789,7 @@ func TestListClientsByClaimMappingPolicyFiltersBySearchTerm(t *testing.T) {
 	policy, err := service.CreateClaimMappingPolicy(context.Background(), OidcClaimMappingPolicyDto{
 		OidcClaimMappingPolicyMetadataDto: OidcClaimMappingPolicyMetadataDto{Name: "Attached"},
 		ClaimMappings: []OidcClaimMappingDto{
-			{ClaimName: "user_id", SourceType: "user_field", SourceValue: string(UserFieldID), IDToken: true},
+			{Scope: []string{"openid"}, ClaimName: "user_id", SourceType: "user_field", SourceValue: string(UserFieldID), IDToken: true},
 		},
 	})
 	require.NoError(t, err)
@@ -792,7 +818,7 @@ func TestListClientsByClaimMappingPolicyEscapesWildcards(t *testing.T) {
 	policy, err := service.CreateClaimMappingPolicy(context.Background(), OidcClaimMappingPolicyDto{
 		OidcClaimMappingPolicyMetadataDto: OidcClaimMappingPolicyMetadataDto{Name: "Attached"},
 		ClaimMappings: []OidcClaimMappingDto{
-			{ClaimName: "user_id", SourceType: "user_field", SourceValue: string(UserFieldID), IDToken: true},
+			{Scope: []string{"openid"}, ClaimName: "user_id", SourceType: "user_field", SourceValue: string(UserFieldID), IDToken: true},
 		},
 	})
 	require.NoError(t, err)
@@ -827,7 +853,7 @@ func TestListClientsByClaimMappingPolicyPaginates(t *testing.T) {
 	policy, err := service.CreateClaimMappingPolicy(context.Background(), OidcClaimMappingPolicyDto{
 		OidcClaimMappingPolicyMetadataDto: OidcClaimMappingPolicyMetadataDto{Name: "Attached"},
 		ClaimMappings: []OidcClaimMappingDto{
-			{ClaimName: "user_id", SourceType: "user_field", SourceValue: string(UserFieldID), IDToken: true},
+			{Scope: []string{"openid"}, ClaimName: "user_id", SourceType: "user_field", SourceValue: string(UserFieldID), IDToken: true},
 		},
 	})
 	require.NoError(t, err)
@@ -870,7 +896,7 @@ func newPolicyWithClients(t *testing.T, svc *Service, name string) OidcClaimMapp
 	policy, err := svc.CreateClaimMappingPolicy(context.Background(), OidcClaimMappingPolicyDto{
 		OidcClaimMappingPolicyMetadataDto: OidcClaimMappingPolicyMetadataDto{Name: name},
 		ClaimMappings: []OidcClaimMappingDto{
-			{ClaimName: "user_id", SourceType: "user_field", SourceValue: string(UserFieldID), IDToken: true},
+			{Scope: []string{"openid"}, ClaimName: "user_id", SourceType: "user_field", SourceValue: string(UserFieldID), IDToken: true},
 		},
 	})
 	require.NoError(t, err)
@@ -1046,4 +1072,60 @@ func TestCreateClaimMappingPolicyConcurrentDefaults(t *testing.T) {
 	var defaults int64
 	require.NoError(t, db.Model(&OidcClaimMappingPolicy{}).Where("is_default = ?", true).Count(&defaults).Error)
 	assert.Equal(t, int64(1), defaults)
+}
+
+func TestValidateClaimMappingsScopes(t *testing.T) {
+	mapping := func(scope []string, apiScopes ...OidcClaimMappingAPIScopeDto) []OidcClaimMappingDto {
+		return []OidcClaimMappingDto{{ClaimName: "groups", SourceType: "user_field", SourceValue: "groups", Scope: scope, APIScopes: apiScopes, AccessToken: true}}
+	}
+	for _, scope := range []string{"openid", "groups", "offline_access"} {
+		require.NoError(t, ValidateClaimMappings(mapping([]string{scope})), scope)
+	}
+	// A bare permission key would match the same key on every API
+	for _, scope := range []string{"read:orders", "all:use", "address", "phone", ""} {
+		require.Error(t, ValidateClaimMappings(mapping([]string{scope})), scope)
+	}
+
+	for _, key := range []string{"read:orders", "all:use", "address", "phone", "https://api.example.com/read"} {
+		require.NoError(t, ValidateClaimMappings(mapping(nil, OidcClaimMappingAPIScopeDto{Resource: "https://api.example.com", Key: key})), key)
+	}
+	for _, key := range []string{"", "two scopes", "bad\nvalue", `bad"value`, `bad\value`, "nonascii-ü", strings.Repeat("a", 129)} {
+		require.Error(t, ValidateClaimMappings(mapping(nil, OidcClaimMappingAPIScopeDto{Resource: "https://api.example.com", Key: key})), key)
+	}
+	for _, resource := range []string{"", "not a uri", "javascript:alert(1)", "https://api.example.com#fragment"} {
+		require.Error(t, ValidateClaimMappings(mapping(nil, OidcClaimMappingAPIScopeDto{Resource: resource, Key: "read:orders"})), resource)
+	}
+}
+
+func TestCreateClaimMappingPolicyStoresAPIScopes(t *testing.T) {
+	service := newTestService(t)
+
+	result, err := service.CreateClaimMappingPolicy(context.Background(), OidcClaimMappingPolicyDto{
+		OidcClaimMappingPolicyMetadataDto: OidcClaimMappingPolicyMetadataDto{Name: "API Policy"},
+		ClaimMappings: []OidcClaimMappingDto{{
+			ClaimName: "groups", SourceType: "user_field", SourceValue: string(UserFieldGroups), AccessToken: true,
+			APIScopes: []OidcClaimMappingAPIScopeDto{{Resource: "https://orders.example.com/", Key: "read:orders"}},
+		}},
+	})
+	require.NoError(t, err)
+
+	policy, err := service.GetClaimMappingPolicy(context.Background(), result.ID)
+	require.NoError(t, err)
+	require.Len(t, policy.ClaimMappings, 1)
+	// Stored like the API's canonical resource identifier, which is also the token audience
+	assert.Equal(t, []OidcClaimMappingAPIScope{{Resource: "https://orders.example.com", Key: "read:orders"}}, policy.ClaimMappings[0].APIScopes)
+}
+
+func TestValidateClaimMappingsRequiresScopeOrAPIPermission(t *testing.T) {
+	for _, payload := range []string{
+		`{}`, `{"scope":[]}`, `{"apiScopes":[]}`, `{"scope":[],"apiScopes":[]}`,
+		`{"scope":null,"apiScopes":null}`,
+	} {
+		t.Run(payload, func(t *testing.T) {
+			mapping := OidcClaimMappingDto{ClaimName: "department", SourceType: "static", SourceValue: "orders", AccessToken: true}
+			require.NoError(t, json.Unmarshal([]byte(payload), &mapping))
+			err := ValidateClaimMappings([]OidcClaimMappingDto{mapping})
+			require.ErrorContains(t, err, "at least one scope or API permission")
+		})
+	}
 }

@@ -198,7 +198,7 @@ func (s *authorizationService) authorize(ctx context.Context, input authorizeInp
 			return txErr
 		}
 
-		txErr = s.claimsService.applyTokenClaims(result.Session, input.requester.GetGrantedScopes(), claimsSource)
+		txErr = s.claimsService.applyTokenClaims(result.Session, input.requester.GetGrantedScopes(), input.requester.GetGrantedAudience(), claimsSource)
 		if txErr != nil {
 			return txErr
 		}

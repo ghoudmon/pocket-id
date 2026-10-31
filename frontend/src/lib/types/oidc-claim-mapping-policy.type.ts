@@ -44,11 +44,18 @@ export const MAPPING_SCOPES = ['openid', 'profile', 'email', 'groups', 'offline_
 
 export type OidcScope = (typeof MAPPING_SCOPES)[number];
 
+export type OidcClaimMappingApiScope = {
+	resource: string;
+	key: string;
+};
+
 export type OidcClaimMappingDto = {
 	claimName: string;
 	sourceType: OidcClaimMappingPolicySourceType;
 	sourceValue: string;
 	scope: OidcScope[];
+	// Permissions of custom APIs, referenced by the API's resource identifier because keys are only unique per API
+	apiScopes?: OidcClaimMappingApiScope[] | null;
 	accessToken: boolean;
 	idToken: boolean;
 	userInfo: boolean;

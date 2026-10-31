@@ -75,7 +75,7 @@ func (h *userInfoHandler) userInfo(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, h.claimsService.buildClaims(claimsSource, accessRequest.GetGrantedScopes(), UserInfoType))
+	c.JSON(http.StatusOK, h.claimsService.buildClaims(claimsSource, accessRequest.GetGrantedScopes(), accessRequest.GetGrantedAudience(), UserInfoType))
 }
 
 func writeUserInfoError(c *gin.Context, err error) {

@@ -90,7 +90,7 @@ func (h *tokenHandler) token(c *gin.Context) {
 
 	// A grant without a resource owner has no source and carries no user claims
 	if claimsSource != nil {
-		err = h.claimsService.applyTokenClaims(requestSession, accessRequest.GetGrantedScopes(), claimsSource)
+		err = h.claimsService.applyTokenClaims(requestSession, accessRequest.GetGrantedScopes(), accessRequest.GetGrantedAudience(), claimsSource)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to apply token claims", "error", err)
 			h.provider.WriteAccessError(ctx, c.Writer, accessRequest, err)

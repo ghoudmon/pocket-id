@@ -180,13 +180,13 @@ func (s *ClaimsService) PreviewClaimMappings(ctx context.Context, userID string,
 	}
 
 	preview := &ClaimMappingsPreview{
-		AccessToken: s.buildClaims(src, scopes, AccessTokenType),
+		AccessToken: s.buildClaims(src, scopes, nil, AccessTokenType),
 	}
 
 	// Without openid a real authorization issues no ID token and /userinfo rejects the access token, so the preview leaves both out
 	if slices.Contains(scopes, "openid") {
-		preview.IDToken = s.buildClaims(src, scopes, IDTokenType)
-		preview.UserInfo = s.buildClaims(src, scopes, UserInfoType)
+		preview.IDToken = s.buildClaims(src, scopes, nil, IDTokenType)
+		preview.UserInfo = s.buildClaims(src, scopes, nil, UserInfoType)
 	}
 
 	return preview, nil
@@ -208,8 +208,8 @@ func (s *ClaimsService) GetClaimMappingPolicyByClientID(ctx context.Context, cli
 	return &claimMappingPolicy, nil
 }
 
-// applyTokenClaims applies the claims of a user to both the ID token and the access token of the session based on the granted scopes
-func (s *ClaimsService) applyTokenClaims(session *Session, scopes fosite.Arguments, src *userClaimsSource) error {
+// applyTokenClaims applies the claims of a user to both the ID token and the access token of the session based on the granted scopes and audience
+func (s *ClaimsService) applyTokenClaims(session *Session, scopes fosite.Arguments, audience fosite.Arguments, src *userClaimsSource) error {
 	// Record the signing algorithm on the ID token header so fosite derives the at_hash/c_hash digest from it (e.g. RS384 -> SHA-384, ES512 -> SHA-512)
 	// Without this the header is empty and fosite defaults to SHA-256, producing wrong hashes whenever the signing key is not a 256-bit algorithm
 	// ToMap() strips "alg" before signing, so this never overrides the real JWS header
@@ -225,11 +225,11 @@ func (s *ClaimsService) applyTokenClaims(session *Session, scopes fosite.Argumen
 	// Both tokens are built from the same source, so they always agree on the user data
 	applyUserClaimsToIDToken(
 		session, src.user.ID,
-		s.buildClaims(src, scopes, IDTokenType),
+		s.buildClaims(src, scopes, audience, IDTokenType),
 	)
 	applyUserClaimsToAccessToken(
 		session,
-		s.buildClaims(src, scopes, AccessTokenType),
+		s.buildClaims(src, scopes, audience, AccessTokenType),
 	)
 
 	return nil
@@ -250,15 +250,15 @@ func applyUserClaimsToAccessToken(session *Session, claims map[string]any) {
 	jwtClaims.Extra = claims
 }
 
-// buildClaims applies the mappings of the policy that target the token type and match the scopes
+// buildClaims applies the mappings of the policy that target the token type and match the granted scopes and audience
 // It works on already loaded data, so it never touches the database and cannot fail
-func (s *ClaimsService) buildClaims(src *userClaimsSource, scopes []string, tokenType TokenType) map[string]any {
+func (s *ClaimsService) buildClaims(src *userClaimsSource, scopes []string, audience []string, tokenType TokenType) map[string]any {
 	claims := make(map[string]any, len(src.policy.ClaimMappings))
 	for _, mapping := range src.policy.ClaimMappings {
 		if ((mapping.IDToken && tokenType == IDTokenType) ||
 			(mapping.AccessToken && tokenType == AccessTokenType) ||
 			(mapping.UserInfo && tokenType == UserInfoType)) &&
-			isScopeMatching(scopes, mapping.Scope) {
+			isScopeMatching(scopes, audience, mapping) {
 			s.applyUserClaims(claims, src.user, src.customClaims, mapping)
 		}
 	}
@@ -317,9 +317,15 @@ func normalizeJSONNumbers(value any) (any, error) {
 	return value, nil
 }
 
-func isScopeMatching(requestedScopes []string, claimScopes []string) bool {
-	for _, claimScope := range claimScopes {
-		if slices.Contains(requestedScopes, claimScope) {
+func isScopeMatching(grantedScopes []string, grantedAudience []string, mapping claimmappingpolicy.OidcClaimMapping) bool {
+	for _, claimScope := range mapping.Scope {
+		if slices.Contains(grantedScopes, claimScope) {
+			return true
+		}
+	}
+	// The same permission key can exist on several APIs, so it only matches a token granted for the API the mapping references
+	for _, apiScope := range mapping.APIScopes {
+		if slices.Contains(grantedScopes, apiScope.Key) && slices.Contains(grantedAudience, apiScope.Resource) {
 			return true
 		}
 	}

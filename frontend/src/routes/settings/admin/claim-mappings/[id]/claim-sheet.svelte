@@ -8,12 +8,15 @@
 	import * as Sheet from '#lib/components/ui/sheet/index.ts';
 	import * as Tabs from '#lib/components/ui/tabs/index.ts';
 	import { m } from '#lib/paraglide/messages.js';
+	import ApisService from '#lib/services/apis-service.ts';
+	import type { Api } from '#lib/types/api.type.ts';
 	import CustomClaimService from '#lib/services/custom-claim-service.ts';
 	import {
 		MAPPING_SCOPES,
 		RESERVED_CLAIM_NAMES,
 		USER_FIELDS,
 		type OidcClaimMappingDto,
+		type OidcClaimMappingApiScope,
 		type OidcClaimMappingPolicySourceType,
 		type OidcScope,
 		type OidcUserField
@@ -55,6 +58,23 @@
 	let allCustom = $state(false);
 	let staticValue = $state({ value: '', error: null as string | null });
 	let scopes = $state<OidcScope[]>([]);
+	let apis = $state<Api[]>([]);
+	let apiScopes = $state<OidcClaimMappingApiScope[]>([]);
+	const availableApiScopes = $derived.by(() => {
+		const items = apis.flatMap((api) =>
+			api.permissions.map((permission) => ({
+				resource: api.resource,
+				key: permission.key,
+				label: `${api.name}: ${permission.key}`
+			}))
+		);
+		for (const selected of apiScopes) {
+			if (!items.some((item) => item.resource === selected.resource && item.key === selected.key)) {
+				items.push({ ...selected, label: `${selected.resource}: ${selected.key}` });
+			}
+		}
+		return items;
+	});
 	let tokens = $state({ idToken: false, accessToken: false, userInfo: false });
 	let scopesError = $state<string | null>(null);
 	let tokensError = $state<string | null>(null);
@@ -84,9 +104,16 @@
 			allCustom = wildcard;
 			staticValue = { value: base.sourceType === 'static' ? base.sourceValue : '', error: null };
 			scopes = [...base.scope];
+			apiScopes = [...(mapping?.apiScopes ?? [])];
 			tokens = { idToken: base.idToken, accessToken: base.accessToken, userInfo: base.userInfo };
 			scopesError = null;
 			tokensError = null;
+			new ApisService()
+				.listAll()
+				.then((result) => (apis = result))
+				.catch(() => {
+					// Previously selected permissions remain editable if the API list is unavailable
+				});
 			customClaimService.getSuggestions().then((keys) => (suggestions = keys));
 		});
 	});
@@ -115,7 +142,7 @@
 				: null;
 		staticValue.error =
 			sourceType === 'static' && !staticValue.value ? m.enter_the_value_every_person_gets() : null;
-		scopesError = scopes.length ? null : m.pick_at_least_one_scope();
+		scopesError = scopes.length + apiScopes.length ? null : m.pick_at_least_one_scope();
 		tokensError = Object.values(tokens).some(Boolean)
 			? null
 			: m.pick_at_least_one_place_to_include_it();
@@ -134,6 +161,7 @@
 			sourceType,
 			sourceValue,
 			scope: MAPPING_SCOPES.filter((s) => scopes.includes(s)),
+			apiScopes: apiScopes.map(({ resource, key }) => ({ resource, key })),
 			...tokens
 		});
 		open = false;
@@ -141,6 +169,14 @@
 
 	function toggleScope(scope: OidcScope, checked: boolean) {
 		scopes = checked ? [...scopes, scope] : scopes.filter((s) => s !== scope);
+		scopesError = null;
+	}
+	function toggleApiScope(scope: OidcClaimMappingApiScope, checked: boolean) {
+		apiScopes = checked
+			? [...apiScopes, { resource: scope.resource, key: scope.key }]
+			: apiScopes.filter(
+					(selected) => selected.resource !== scope.resource || selected.key !== scope.key
+				);
 		scopesError = null;
 	}
 </script>
@@ -248,6 +284,19 @@
 								aria-invalid={!!scopesError}
 							/>
 							{scope}
+						</label>
+					{/each}
+					{#each availableApiScopes as permission (`${permission.resource} ${permission.key}`)}
+						<label class="text-mono-s text-fg flex items-center gap-3 font-mono">
+							<Checkbox
+								checked={apiScopes.some(
+									(selected) =>
+										selected.resource === permission.resource && selected.key === permission.key
+								)}
+								onCheckedChange={(checked) => toggleApiScope(permission, checked)}
+								aria-invalid={!!scopesError}
+							/>
+							{permission.label}
 						</label>
 					{/each}
 				</div>
