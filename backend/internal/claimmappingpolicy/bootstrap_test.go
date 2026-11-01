@@ -109,3 +109,20 @@ func TestBootstrapRestoresDefaultWhenNoneExists(t *testing.T) {
 		require.True(t, builtIn.IsDefault)
 	})
 }
+
+func TestClaimMappingMigrationUpgradesExistingInstallation(t *testing.T) {
+	db := testutils.NewDatabaseForTestWithMigrationSeed(t, 20261011120000, func(t *testing.T, db *gorm.DB) {
+		require.False(t, db.Migrator().HasTable("oidc_claim_mapping_policies"), "the released schema must not already contain the new feature")
+		require.NoError(t, db.Create(&model.User{Base: model.Base{ID: "existing-user"}, Username: "existing"}).Error)
+		require.NoError(t, db.Omit("ClaimMappingPolicyId").Create(&model.OidcClient{Base: model.Base{ID: "existing-client"}, Name: "Existing"}).Error)
+	})
+	require.True(t, db.Migrator().HasTable("oidc_claim_mapping_policies"))
+	require.True(t, db.Migrator().HasColumn(&model.OidcClient{}, "ClaimMappingPolicyId"))
+	var user model.User
+	require.NoError(t, db.First(&user, "id = ?", "existing-user").Error)
+	require.Equal(t, "existing", user.Username)
+	var client model.OidcClient
+	require.NoError(t, db.First(&client, "id = ?", "existing-client").Error)
+	require.Nil(t, client.ClaimMappingPolicyId)
+	require.NoError(t, Bootstrap(t.Context(), db))
+}
